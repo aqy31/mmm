@@ -115,7 +115,7 @@
     </style>
 
     <script>
-        // الأداة للتحكم بدوران المجسم
+        // أداة دوران المجسم وكاميرا الموبايل (نفسها بدون تغيير)
         AFRAME.registerComponent('artifact-rotator', {
             init: function () {
                 this.isDragging = false;
@@ -166,7 +166,7 @@
             }
         });
 
-        // كود تحكم الكاميرا
+        // تحكم المشي والتقريب (نفسه بدون تغيير)
         AFRAME.registerComponent('blender-controls', {
             schema: { speed: {default: 0.015}, zoomSpeed: {default: 0.08} },
             init: function () {
@@ -299,7 +299,6 @@
             scale = Math.min(Math.max(0.3, scale), 3); pointX = e.clientX - xs * scale; pointY = e.clientY - ys * scale; updateMapTransform();
         };
 
-        // رجعنا المصفوفة كاملة 12 مجسم! (اللي مابيها ملف راح تطلع كعمود فارغ ينتظرك)
         const sitesData = {
             'site1': [ 
                 { id: 'p1', model: './models/winged_bull.glb', x: -4, z: -4, scale: '1 1 1', rot: '0 45 0', title: 'الثور المجنح (لاماسو)', desc: 'تمثال ضخم برأس إنسان وجسد ثور وأجنحة نسر. كان يوضع على بوابات المدن لحمايتها من الأرواح الشريرة.' },
@@ -358,9 +357,11 @@
                 if (item.model) {
                     artifact = document.createElement('a-entity');
                     artifact.setAttribute('gltf-model', `url(${item.model})`); 
-                    artifact.setAttribute('scale', item.scale); 
+                    // التعديل الأول: فرض حجم موحد لكل المجسمات
+                    artifact.setAttribute('scale', '0.5 0.5 0.5'); 
                     artifact.setAttribute('rotation', item.rot); 
-                    artifact.setAttribute('position', '0 1.5 0'); 
+                    // التعديل الثاني: وضعها مباشرة فوق الأسطوانة بارتفاع 0.75
+                    artifact.setAttribute('position', '0 0.75 0'); 
                     artifact.setAttribute('class', 'clickable'); 
                     group.appendChild(artifact);
                 }
