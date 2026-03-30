@@ -71,79 +71,25 @@
     </style>
 
     <script>
-        // متغيرات عامة لحفظ القطعة اللي نضغط عليها
-        window.inspectedArtifact = null;
-        window.originalArtifactRot = null;
-
         AFRAME.registerComponent('blender-controls', {
             schema: { speed: {default: 0.015}, zoomSpeed: {default: 0.08} },
             init: function () {
                 this.camera = document.querySelector('#cam');
-                this.active = false; 
-                this.isDraggingArtifact = false; // هل المستخدم يلمس القطعة؟
-                this.lastX = 0; this.lastY = 0;
-                
-                // أدوات الاستشعار (Raycaster) للتمييز بين القطعة والفراغ
-                this.raycaster = new THREE.Raycaster();
-                this.mouse = new THREE.Vector2();
-
+                this.active = false; this.lastX = 0; this.lastY = 0;
                 document.addEventListener('contextmenu', e => e.preventDefault());
                 
-                // --- تحكم الماوس ---
                 document.addEventListener('mousedown', (e) => {
-                    if (window.inspectedArtifact && e.button === 0) {
-                        this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-                        this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-                        this.raycaster.setFromCamera(this.mouse, this.camera.components.camera.camera);
-                        let intersects = this.raycaster.intersectObject(window.inspectedArtifact.object3D, true);
-                        
-                        if (intersects.length > 0) {
-                            this.isDraggingArtifact = true;
-                            this.lastX = e.clientX; this.lastY = e.clientY;
-                            document.querySelector('#cam').setAttribute('look-controls', 'enabled', false); // إيقاف دوران الكاميرا
-                            return;
-                        }
-                    }
                     if (e.button === 2 || e.button === 1) { this.active = true; this.lastX = e.clientX; this.lastY = e.clientY; }
                 });
-                
-                document.addEventListener('mouseup', () => {
-                    this.active = false;
-                    if (this.isDraggingArtifact) {
-                        this.isDraggingArtifact = false;
-                        document.querySelector('#cam').setAttribute('look-controls', 'enabled', true); // إرجاع الكاميرا
-                    }
-                });
-                
+                document.addEventListener('mouseup', () => this.active = false);
                 document.addEventListener('mousemove', (e) => {
-                    if (this.isDraggingArtifact && window.inspectedArtifact) {
-                        let dx = e.clientX - this.lastX, dy = e.clientY - this.lastY;
-                        this.lastX = e.clientX; this.lastY = e.clientY;
-                        window.inspectedArtifact.object3D.rotation.y += dx * 0.01;
-                        window.inspectedArtifact.object3D.rotation.x += dy * 0.01;
-                        return;
-                    }
                     if (!this.active) return;
                     let dx = e.clientX - this.lastX, dy = e.clientY - this.lastY;
                     this.lastX = e.clientX; this.lastY = e.clientY; this.pan(-dx, dy);
                 });
 
-                // --- تحكم الموبايل واللمس ---
                 let initialDist = 0;
                 document.addEventListener('touchstart', (e) => {
-                    if (e.touches.length === 1 && window.inspectedArtifact) {
-                        this.mouse.x = (e.touches[0].clientX / window.innerWidth) * 2 - 1;
-                        this.mouse.y = -(e.touches[0].clientY / window.innerHeight) * 2 + 1;
-                        this.raycaster.setFromCamera(this.mouse, this.camera.components.camera.camera);
-                        let intersects = this.raycaster.intersectObject(window.inspectedArtifact.object3D, true);
-                        
-                        if (intersects.length > 0) {
-                            this.isDraggingArtifact = true;
-                            this.lastX = e.touches[0].clientX; this.lastY = e.touches[0].clientY;
-                            document.querySelector('#cam').setAttribute('look-controls', 'enabled', false);
-                            return;
-                        }
-                    }
                     if (e.touches.length === 2) {
                         this.active = true;
                         this.lastX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
@@ -151,15 +97,7 @@
                         initialDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
                     }
                 });
-                
                 document.addEventListener('touchmove', (e) => {
-                    if (this.isDraggingArtifact && e.touches.length === 1 && window.inspectedArtifact) {
-                        let dx = e.touches[0].clientX - this.lastX, dy = e.touches[0].clientY - this.lastY;
-                        this.lastX = e.touches[0].clientX; this.lastY = e.touches[0].clientY;
-                        window.inspectedArtifact.object3D.rotation.y += dx * 0.01;
-                        window.inspectedArtifact.object3D.rotation.x += dy * 0.01;
-                        return;
-                    }
                     if (this.active && e.touches.length === 2) {
                         let cx = (e.touches[0].clientX + e.touches[1].clientX) / 2, cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
                         let dx = cx - this.lastX, dy = cy - this.lastY;
@@ -172,15 +110,7 @@
                         this.zoom(distDelta * -this.data.zoomSpeed); 
                     }
                 });
-                
-                document.addEventListener('touchend', () => {
-                    this.active = false;
-                    if (this.isDraggingArtifact) {
-                        this.isDraggingArtifact = false;
-                        document.querySelector('#cam').setAttribute('look-controls', 'enabled', true);
-                    }
-                });
-                
+                document.addEventListener('touchend', () => this.active = false);
                 document.addEventListener('wheel', (e) => { this.zoom(e.deltaY * 0.02); });
             },
             pan: function(dx, dy) {
@@ -209,7 +139,7 @@
     <div id="controls-ui">
         <div id="instructions">
             <b>تحكم الموبايل:</b><br>
-            👆 إصبع واحد: التفات الكاميرا أو دوران القطعة<br>
+            👆 إصبع واحد: التفات<br>
             ✌️ إصبعين: مشي وزووم<br>
             🖱️ اضغط على التحفة للتفاصيل
         </div>
@@ -222,14 +152,13 @@
         <button id="close-info-btn" onclick="closeInfoPanel()">إغلاق الشرح</button>
     </div>
 
-    <a-scene id="main-scene" background="color: #1a1a1a" renderer="colorManagement: true;">
+    <a-scene id="main-scene" background="color: #1a1a1a" renderer="colorManagement: true;" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
         <a-light type="ambient" color="#bbbbbb"></a-light>
         <a-light type="directional" intensity="1.5" position="1 4 2"></a-light>
         <a-grid material="color: #333" position="0 -0.01 0"></a-grid>
 
         <a-entity id="cameraRig" position="0 1.6 0" blender-controls>
             <a-camera id="cam" look-controls>
-                <a-cursor color="#e9d8a6" raycaster="objects: .clickable"></a-cursor>
             </a-camera>
         </a-entity>
 
@@ -319,12 +248,6 @@
                     setTimeout(() => {
                         infoTitle.innerText = item.title; infoDesc.innerText = item.desc; infoPanel.style.display = 'block';
                     }, 1200);
-
-                    // حفظ التحفة للتدوير
-                    if (artifact) {
-                        window.inspectedArtifact = artifact;
-                        window.originalArtifactRot = { x: artifact.object3D.rotation.x, y: artifact.object3D.rotation.y, z: artifact.object3D.rotation.z };
-                    }
                 };
 
                 pillar.addEventListener('click', handleClick);
@@ -335,24 +258,12 @@
         function closeInfoPanel() {
             infoPanel.style.display = 'none';
             cameraRig.setAttribute('animation', `property: position; to: 0 1.6 0; dur: 1500; easing: easeOutCubic`);
-            
-            // إرجاع التحفة لزاويتها الأصلية ومسح المتغير
-            if (window.inspectedArtifact && window.originalArtifactRot) {
-                window.inspectedArtifact.object3D.rotation.set(
-                    window.originalArtifactRot.x, 
-                    window.originalArtifactRot.y, 
-                    window.originalArtifactRot.z
-                );
-            }
-            window.inspectedArtifact = null;
-            document.querySelector('#cam').setAttribute('look-controls', 'enabled', true);
         }
 
         function exitSite() {
             uiLayer.style.opacity = '1'; uiLayer.style.pointerEvents = 'all'; 
             controlsUI.style.display = 'none'; infoPanel.style.display = 'none';
             pillarsContainer.innerHTML = ''; cameraRig.removeAttribute('animation'); cameraRig.setAttribute('position', '0 1.6 0'); 
-            window.inspectedArtifact = null;
         }
     </script>
 </body>
