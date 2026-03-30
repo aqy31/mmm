@@ -16,7 +16,7 @@
             background: radial-gradient(circle at center, #152233 0%, #05080c 100%);
             z-index: 100; overflow: hidden;
             transition: opacity 0.8s ease-in-out;
-            display: block; /* التعديل هنا لضمان ظهوره واختفائه بشكل صحيح */
+            display: block; 
         }
 
         #map-content {
@@ -115,6 +115,64 @@
     </style>
 
     <script>
+        // الأداة المعدلة: تلتقط اللمس فقط إذا كان على المجسم نفسه
+        AFRAME.registerComponent('artifact-rotator', {
+            init: function () {
+                this.isDragging = false;
+                this.previousX = 0;
+                this.camera = document.querySelector('#cam');
+                
+                this.onDown = (e) => {
+                    this.isDragging = true;
+                    // استخراج موقع اللمس الأصلي من شعاع المؤشر
+                    let evt = e.detail && e.detail.mouseEvent ? e.detail.mouseEvent : e;
+                    this.previousX = evt.clientX || (evt.touches && evt.touches[0] ? evt.touches[0].clientX : 0);
+                    // إيقاف دوران الكاميرا فقط لمن نلزم المجسم
+                    if(this.camera) this.camera.setAttribute('look-controls', 'enabled', false);
+                };
+
+                this.onMove = (e) => {
+                    if (!this.isDragging) return;
+                    let clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : undefined);
+                    if(clientX === undefined) return;
+                    let deltaX = clientX - this.previousX;
+                    this.el.object3D.rotation.y += deltaX * 0.015;
+                    this.previousX = clientX;
+                };
+
+                this.onUp = () => {
+                    if(this.isDragging) {
+                        this.isDragging = false;
+                        // نرجع نشغل الكاميرا من نشيل اصبعنا عن المجسم
+                        if(this.camera) this.camera.setAttribute('look-controls', 'enabled', true);
+                    }
+                };
+
+                // المجسم نفسه فقط يتأثر بالضغط
+                this.el.addEventListener('mousedown', this.onDown);
+                
+                // حركة السحب والإفلات تسجل على مستوى الشاشة حتى لو طلع اصبعك بره المجسم
+                window.addEventListener('mousemove', this.onMove);
+                window.addEventListener('mouseup', this.onUp);
+                window.addEventListener('touchmove', this.onMove, {passive: true});
+                window.addEventListener('touchend', this.onUp);
+            },
+            tick: function () {
+                if (!this.isDragging) {
+                    this.el.object3D.rotation.y += 0.005; 
+                }
+            },
+            remove: function () {
+                this.el.removeEventListener('mousedown', this.onDown);
+                window.removeEventListener('mousemove', this.onMove);
+                window.removeEventListener('mouseup', this.onUp);
+                window.removeEventListener('touchmove', this.onMove);
+                window.removeEventListener('touchend', this.onUp);
+                if(this.camera) this.camera.setAttribute('look-controls', 'enabled', true);
+            }
+        });
+
+        // كود تحكم الكاميرا الأصلي للزووم والمشي
         AFRAME.registerComponent('blender-controls', {
             schema: { speed: {default: 0.015}, zoomSpeed: {default: 0.08} },
             init: function () {
@@ -195,12 +253,12 @@
 
             <div id="pin-site1" class="map-pin" style="top: 45%; left: 65%;" onclick="enterSite('site1')">
                 <div class="pin-dot"></div>
-                <div class="pin-label"> نينوى </div>
+                <div class="pin-label">📍 القاعة الرئيسية (6 تحف)</div>
             </div>
             
             <div id="pin-site2" class="map-pin" style="top: 65%; left: 25%;" onclick="enterSite('site2')">
                 <div class="pin-dot"></div>
-                <div class="pin-label"> الموصل </div>
+                <div class="pin-label">📍 قاعة الآثار الإسلامية</div>
             </div>
         </div>
     </div>
@@ -274,7 +332,6 @@
             uiLayer.style.opacity = '0';
             document.getElementById('instructions').style.opacity = '1'; 
             
-            // التعديل الأساسي هنا: إخفاء واجهة الخريطة بالكامل حتى لا تحجب المجسمات بالموبايل
             setTimeout(() => {
                 uiLayer.style.display = 'none'; 
                 uiLayer.style.pointerEvents = 'none'; 
@@ -298,7 +355,6 @@
                 let artifact;
                 if (item.model) {
                     artifact = document.createElement('a-entity');
-                    // التعديل هنا لضمان قراءة المودل بشكل صحيح
                     artifact.setAttribute('gltf-model', `url(${item.model})`); 
                     artifact.setAttribute('scale', item.scale); 
                     artifact.setAttribute('rotation', item.rot); 
@@ -323,14 +379,12 @@
                     cameraRig.setAttribute('animation', `property: position; to: ${zoomX} 1.6 ${zoomZ}; dur: 1500; easing: easeOutCubic`);
                     
                     if (window.currentRotatingArtifact && window.currentArtifactOriginalRot) {
-                        window.currentRotatingArtifact.removeAttribute('animation__rotate');
+                        window.currentRotatingArtifact.removeAttribute('artifact-rotator');
                         window.currentRotatingArtifact.setAttribute('rotation', window.currentArtifactOriginalRot);
                     }
                     
                     if (artifact) {
-                        let rotCoords = item.rot.split(' ').map(Number);
-                        let toRot = `${rotCoords[0]} ${rotCoords[1] + 360} ${rotCoords[2]}`;
-                        artifact.setAttribute('animation__rotate', `property: rotation; from: ${item.rot}; to: ${toRot}; loop: true; dur: 12000; easing: linear;`);
+                        artifact.setAttribute('artifact-rotator', '');
                         window.currentRotatingArtifact = artifact;
                         window.currentArtifactOriginalRot = item.rot;
                     }
@@ -351,14 +405,14 @@
             cameraRig.setAttribute('animation', `property: position; to: 0 1.6 0; dur: 1500; easing: easeOutCubic`);
             
             if (window.currentRotatingArtifact && window.currentArtifactOriginalRot) {
-                window.currentRotatingArtifact.removeAttribute('animation__rotate');
+                window.currentRotatingArtifact.removeAttribute('artifact-rotator');
                 window.currentRotatingArtifact.setAttribute('rotation', window.currentArtifactOriginalRot);
                 window.currentRotatingArtifact = null;
             }
         }
 
         function exitSite() {
-            uiLayer.style.display = 'block'; // إعادة إظهار طبقة الخريطة
+            uiLayer.style.display = 'block'; 
             setTimeout(() => {
                 uiLayer.style.opacity = '1'; 
                 uiLayer.style.pointerEvents = 'all'; 
