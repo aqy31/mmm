@@ -115,7 +115,7 @@
     </style>
 
     <script>
-        // الأداة المعدلة: تلتقط اللمس فقط إذا كان على المجسم نفسه
+        // الأداة للتحكم بدوران المجسم
         AFRAME.registerComponent('artifact-rotator', {
             init: function () {
                 this.isDragging = false;
@@ -124,10 +124,8 @@
                 
                 this.onDown = (e) => {
                     this.isDragging = true;
-                    // استخراج موقع اللمس الأصلي من شعاع المؤشر
                     let evt = e.detail && e.detail.mouseEvent ? e.detail.mouseEvent : e;
                     this.previousX = evt.clientX || (evt.touches && evt.touches[0] ? evt.touches[0].clientX : 0);
-                    // إيقاف دوران الكاميرا فقط لمن نلزم المجسم
                     if(this.camera) this.camera.setAttribute('look-controls', 'enabled', false);
                 };
 
@@ -143,15 +141,11 @@
                 this.onUp = () => {
                     if(this.isDragging) {
                         this.isDragging = false;
-                        // نرجع نشغل الكاميرا من نشيل اصبعنا عن المجسم
                         if(this.camera) this.camera.setAttribute('look-controls', 'enabled', true);
                     }
                 };
 
-                // المجسم نفسه فقط يتأثر بالضغط
                 this.el.addEventListener('mousedown', this.onDown);
-                
-                // حركة السحب والإفلات تسجل على مستوى الشاشة حتى لو طلع اصبعك بره المجسم
                 window.addEventListener('mousemove', this.onMove);
                 window.addEventListener('mouseup', this.onUp);
                 window.addEventListener('touchmove', this.onMove, {passive: true});
@@ -172,7 +166,7 @@
             }
         });
 
-        // كود تحكم الكاميرا الأصلي للزووم والمشي
+        // كود تحكم الكاميرا
         AFRAME.registerComponent('blender-controls', {
             schema: { speed: {default: 0.015}, zoomSpeed: {default: 0.08} },
             init: function () {
@@ -305,6 +299,7 @@
             scale = Math.min(Math.max(0.3, scale), 3); pointX = e.clientX - xs * scale; pointY = e.clientY - ys * scale; updateMapTransform();
         };
 
+        // رجعنا المصفوفة كاملة 12 مجسم! (اللي مابيها ملف راح تطلع كعمود فارغ ينتظرك)
         const sitesData = {
             'site1': [ 
                 { id: 'p1', model: './models/winged_bull.glb', x: -4, z: -4, scale: '1 1 1', rot: '0 45 0', title: 'الثور المجنح (لاماسو)', desc: 'تمثال ضخم برأس إنسان وجسد ثور وأجنحة نسر. كان يوضع على بوابات المدن لحمايتها من الأرواح الشريرة.' },
@@ -314,7 +309,14 @@
                 { id: 'p5', model: './models/nimrud_obelisk.glb', x: 0, z: 5, scale: '1 1 1', rot: '0 0 0', title: 'المسلة السوداء', desc: 'مسلة تاريخية تعود للملك شلمنصر الثالث، اكتُشفت في مدينة نمرود توثق انتصارات الملك.' },
                 { id: 'p6', model: './models/spring_girl.glb', x: -5, z: 2, scale: '1 1 1', rot: '0 135 0', title: 'تمثال فتاة الربيع', desc: 'أحد الرموز الحديثة لمدينة الموصل، يجسد جمال المدينة التي تُلقب بـ "أم الربيعين".' }
             ],
-            'site2': [ { id: 'p7', color: '#005f73', x: -3, z: -3 }, { id: 'p8', color: '#0a9396', x: 3, z: -3 } ]
+            'site2': [ 
+                { id: 'p7', model: './models/alhadba_minaret.glb', x: -4, z: -4, scale: '1 1 1', rot: '0 0 0', title: 'المنارة الحدباء', desc: 'المعلم الأبرز لمدينة الموصل، بُنيت في القرن الثاني عشر الميلادي وتتميز بميلانها وزخارفها الآجرية الفريدة.' },
+                { id: 'p8', model: './models/nuri_mihrab.glb', x: 0, z: -6, scale: '1 1 1', rot: '0 0 0', title: 'محراب الجامع النوري', desc: 'قطعة فنية نادرة من الرخام (الفرش الموصلي) مزينة بآيات قرآنية وزخارف نباتية وهندسية غاية في الدقة.' },
+                { id: 'p9', model: './models/mosuli_ewer.glb', x: 4, z: -4, scale: '1 1 1', rot: '0 -45 0', title: 'إبريق نحاسي موصلي', desc: 'تحفة من الصناعات المعدنية الموصلية (القرن الـ 13)، مطعم بالفضة ويحمل نقوشاً تعكس براعة حرفيي الموصل القدماء.' },
+                { id: 'p10', model: './models/gold_dinar.glb', x: 5, z: 2, scale: '1 1 1', rot: '0 90 0', title: 'دينار إسلامي', desc: 'عملة نقدية تاريخية ضُربت في مدينة الموصل، تعكس الأهمية الاقتصادية والسياسية للمدينة في العصور الإسلامية.' },
+                { id: 'p11', model: './models/bashtabiya.glb', x: 0, z: 5, scale: '1 1 1', rot: '0 0 0', title: 'مجسم قلعة باشطابيا', desc: 'بقايا القلعة التاريخية المطلة على نهر دجلة، والتي صمدت في وجه العديد من الحصارات عبر التاريخ.' },
+                { id: 'p12', model: './models/wood_box.glb', x: -5, z: 2, scale: '1 1 1', rot: '0 135 0', title: 'صندوق أتابكي مطعم', desc: 'صندوق أثري من العصر الأتابكي، يعكس دقة الحفر على الخشب وتطعيمه بالصدف والعاج بطريقة احترافية.' }
+            ]
         };
 
         const uiLayer = document.getElementById('ui-layer');
@@ -418,6 +420,7 @@
                 uiLayer.style.pointerEvents = 'all'; 
             }, 10);
             
+            document.getElementById('cam').setAttribute('look-controls', 'enabled: true');
             controlsUI.style.display = 'none'; infoPanel.style.display = 'none';
             document.getElementById('instructions').style.opacity = '1'; 
             pillarsContainer.innerHTML = ''; cameraRig.removeAttribute('animation'); cameraRig.setAttribute('position', '0 1.6 0'); 
