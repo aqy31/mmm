@@ -50,6 +50,8 @@
         #instructions {
             background: rgba(0, 0, 0, 0.8); color: #fff; padding: 12px; border-radius: 8px;
             font-size: 14px; text-align: right; pointer-events: none; border: 1px solid #555;
+            transition: opacity 0.5s ease; /* إضافة حركة نعومة لاختفاء التعليمات */
+            opacity: 1;
         }
 
         #info-panel {
@@ -122,6 +124,12 @@
                 if (!this.camera) return; let camRot = this.camera.object3D.rotation;
                 let v = new THREE.Vector3(0, 0, dz);
                 v.applyEuler(camRot); this.el.object3D.position.add(v);
+
+                // إخفاء الشرح والتعليمات عند عمل زووم (تقريب/تبعيد)
+                let infoPanel = document.getElementById('info-panel');
+                let instructions = document.getElementById('instructions');
+                if (infoPanel) infoPanel.style.display = 'none';
+                if (instructions) instructions.style.opacity = '0'; // يختفي بنعومة
             }
         });
     </script>
@@ -158,8 +166,7 @@
         <a-grid material="color: #333" position="0 -0.01 0"></a-grid>
 
         <a-entity id="cameraRig" position="0 1.6 0" blender-controls>
-            <a-camera id="cam" look-controls>
-            </a-camera>
+            <a-camera id="cam" look-controls></a-camera>
         </a-entity>
 
         <a-entity id="pillars-container"></a-entity>
@@ -198,9 +205,13 @@
         const infoPanel = document.getElementById('info-panel');
         const infoTitle = document.getElementById('info-title');
         const infoDesc = document.getElementById('info-desc');
+        
+        window.currentRotatingArtifact = null;
+        window.currentArtifactOriginalRot = null;
 
         function enterSite(siteId) {
             uiLayer.style.opacity = '0';
+            document.getElementById('instructions').style.opacity = '1'; // إرجاع التعليمات عند الدخول
             setTimeout(() => {
                 uiLayer.style.pointerEvents = 'none'; controlsUI.style.display = 'flex'; spawnPillarsAndArtifacts(sitesData[siteId], siteId); 
             }, 800);
@@ -244,6 +255,19 @@
                     
                     cameraRig.setAttribute('animation', `property: position; to: ${zoomX} 1.6 ${zoomZ}; dur: 1500; easing: easeOutCubic`);
                     
+                    if (window.currentRotatingArtifact && window.currentArtifactOriginalRot) {
+                        window.currentRotatingArtifact.removeAttribute('animation__rotate');
+                        window.currentRotatingArtifact.setAttribute('rotation', window.currentArtifactOriginalRot);
+                    }
+                    
+                    if (artifact) {
+                        let rotCoords = item.rot.split(' ').map(Number);
+                        let toRot = `${rotCoords[0]} ${rotCoords[1] + 360} ${rotCoords[2]}`;
+                        artifact.setAttribute('animation__rotate', `property: rotation; from: ${item.rot}; to: ${toRot}; loop: true; dur: 12000; easing: linear;`);
+                        window.currentRotatingArtifact = artifact;
+                        window.currentArtifactOriginalRot = item.rot;
+                    }
+                    
                     infoPanel.style.display = 'none';
                     setTimeout(() => {
                         infoTitle.innerText = item.title; infoDesc.innerText = item.desc; infoPanel.style.display = 'block';
@@ -258,12 +282,21 @@
         function closeInfoPanel() {
             infoPanel.style.display = 'none';
             cameraRig.setAttribute('animation', `property: position; to: 0 1.6 0; dur: 1500; easing: easeOutCubic`);
+            
+            if (window.currentRotatingArtifact && window.currentArtifactOriginalRot) {
+                window.currentRotatingArtifact.removeAttribute('animation__rotate');
+                window.currentRotatingArtifact.setAttribute('rotation', window.currentArtifactOriginalRot);
+                window.currentRotatingArtifact = null;
+            }
         }
 
         function exitSite() {
             uiLayer.style.opacity = '1'; uiLayer.style.pointerEvents = 'all'; 
             controlsUI.style.display = 'none'; infoPanel.style.display = 'none';
+            document.getElementById('instructions').style.opacity = '1'; // إرجاع التعليمات للضمان
             pillarsContainer.innerHTML = ''; cameraRig.removeAttribute('animation'); cameraRig.setAttribute('position', '0 1.6 0'); 
+            window.currentRotatingArtifact = null;
+            window.currentArtifactOriginalRot = null;
         }
     </script>
 </body>
