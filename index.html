@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>متحف الموصل الافتراضي - العرض التفاعلي</title>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #111; touch-action: none; }
+        
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #dcd7c6; z-index: 100; overflow: hidden;
+            transition: opacity 0.8s ease-in-out;
+        }
+        #map-content {
+            position: absolute; width: 2000px; height: 2000px;
+            background-image: repeating-linear-gradient(0deg, transparent, transparent 49px, #ccc 49px, #ccc 50px),
+                              repeating-linear-gradient(90deg, transparent, transparent 49px, #ccc 49px, #ccc 50px);
+            background-color: #e5e0d0;
+            top: 50%; left: 50%; transform: translate(-50%, -50%) scale(1);
+            transform-origin: 0 0; cursor: grab;
+        }
+        #map-content:active { cursor: grabbing; }
+        .map-title {
+            position: absolute; top: 20px; width: 100%; text-align: center;
+            font-size: 30px; font-weight: bold; color: #333; z-index: 101; pointer-events: none;
+            text-shadow: 2px 2px 5px rgba(255,255,255,0.8);
+        }
+        .map-pin {
+            position: absolute; width: auto; padding: 10px 20px;
+            background-color: #8b0000; color: white; font-weight: bold; font-size: 18px;
+            border: 3px solid #fff; border-radius: 30px; cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4); transform: translate(-50%, -50%);
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        .map-pin:hover { background-color: #b22222; transform: translate(-50%, -50%) scale(1.1); }
+        #pin-site1 { top: 40%; left: 50%; }
+        #pin-site2 { top: 60%; left: 30%; }
+
+        #controls-ui {
+            position: absolute; top: 20px; left: 20px; right: 20px; z-index: 101;
+            display: none; justify-content: space-between; align-items: flex-start; pointer-events: none;
+        }
+        #back-btn {
+            padding: 10px 20px; background: rgba(255, 0, 0, 0.8); color: white;
+            border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px;
+            pointer-events: all; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        #instructions {
+            background: rgba(0, 0, 0, 0.8); color: #fff; padding: 12px; border-radius: 8px;
+            font-size: 14px; text-align: right; pointer-events: none; border: 1px solid #555;
+        }
+
+        #info-panel {
+            display: none; position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            width: 85%; max-width: 500px;
+            background: rgba(15, 15, 15, 0.85); backdrop-filter: blur(10px);
+            color: #fff; padding: 25px; border-radius: 15px; border: 1px solid #e9d8a6;
+            z-index: 200; text-align: right; box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+            animation: fadeIn 0.5s ease-out;
+        }
+        @keyframes fadeIn { from { opacity: 0; bottom: -20px; } to { opacity: 1; bottom: 30px; } }
+        #info-title { margin-top: 0; color: #e9d8a6; font-size: 24px; border-bottom: 1px solid #555; padding-bottom: 10px; }
+        #info-desc { font-size: 16px; line-height: 1.6; margin-bottom: 20px; color: #ddd; }
+        #close-info-btn {
+            background: #8b0000; color: white; border: none; font-weight: bold;
+            padding: 10px 20px; border-radius: 8px; cursor: pointer; float: left; transition: background 0.2s;
+        }
+        #close-info-btn:hover { background: #ff0000; }
+    </style>
+
+    <script>
+        AFRAME.registerComponent('blender-controls', {
+            schema: { speed: {default: 0.015}, zoomSpeed: {default: 0.08} },
+            init: function () {
+                this.camera = document.querySelector('#cam');
+                this.active = false; this.lastX = 0; this.lastY = 0;
+                document.addEventListener('contextmenu', e => e.preventDefault());
+                
+                document.addEventListener('mousedown', (e) => {
+                    if (e.button === 2 || e.button === 1) { this.active = true; this.lastX = e.clientX; this.lastY = e.clientY; }
+                });
+                document.addEventListener('mouseup', () => this.active = false);
+                document.addEventListener('mousemove', (e) => {
+                    if (!this.active) return;
+                    let dx = e.clientX - this.lastX, dy = e.clientY - this.lastY;
+                    this.lastX = e.clientX; this.lastY = e.clientY; this.pan(-dx, dy);
+                });
+
+                let initialDist = 0;
+                document.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 2) {
+                        this.active = true;
+                        this.lastX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                        this.lastY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                        initialDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                    }
+                });
+                document.addEventListener('touchmove', (e) => {
+                    if (this.active && e.touches.length === 2) {
+                        let cx = (e.touches[0].clientX + e.touches[1].clientX) / 2, cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                        let dx = cx - this.lastX, dy = cy - this.lastY;
+                        this.lastX = cx; this.lastY = cy; 
+                        this.pan(-dx, dy); 
+                        
+                        let currentDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                        let distDelta = currentDist - initialDist; 
+                        initialDist = currentDist; 
+                        this.zoom(distDelta * -this.data.zoomSpeed); 
+                    }
+                });
+                document.addEventListener('touchend', () => this.active = false);
+                document.addEventListener('wheel', (e) => { this.zoom(e.deltaY * 0.02); });
+            },
+            pan: function(dx, dy) {
+                if (!this.camera) return; let camRot = this.camera.object3D.rotation;
+                let v = new THREE.Vector3(dx * this.data.speed, -dy * this.data.speed, 0);
+                v.applyEuler(camRot); this.el.object3D.position.add(v);
+            },
+            zoom: function(dz) {
+                if (!this.camera) return; let camRot = this.camera.object3D.rotation;
+                let v = new THREE.Vector3(0, 0, dz);
+                v.applyEuler(camRot); this.el.object3D.position.add(v);
+            }
+        });
+    </script>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div class="map-title">اسحب الخارطة واختر موقعاً للتنقيب</div>
+        <div id="map-content">
+            <div id="pin-site1" class="map-pin" onclick="enterSite('site1')">📍 القاعة الرئيسية (6 تحف)</div>
+            <div id="pin-site2" class="map-pin" onclick="enterSite('site2')">📍 قاعة الآثار</div>
+        </div>
+    </div>
+
+    <div id="controls-ui">
+        <div id="instructions">
+            <b>تحكم الموبايل:</b><br>
+            👆 إصبع واحد: التفات<br>
+            ✌️ إصبعين: مشي وزووم<br>
+            🖱️ اضغط على التحفة للتفاصيل
+        </div>
+        <button id="back-btn" onclick="exitSite()">الرجوع للخارطة</button>
+    </div>
+
+    <div id="info-panel">
+        <h2 id="info-title">عنوان القطعة</h2>
+        <p id="info-desc">شرح تفصيلي عن القطعة الأثرية يظهر هنا...</p>
+        <button id="close-info-btn" onclick="closeInfoPanel()">إغلاق الشرح</button>
+    </div>
+
+    <a-scene id="main-scene" background="color: #1a1a1a" renderer="colorManagement: true;">
+        <a-light type="ambient" color="#bbbbbb"></a-light>
+        <a-light type="directional" intensity="1.5" position="1 4 2"></a-light>
+        <a-grid material="color: #333" position="0 -0.01 0"></a-grid>
+
+        <a-entity id="cameraRig" position="0 1.6 0" blender-controls>
+            <a-camera id="cam" look-controls>
+                <a-cursor color="#e9d8a6" raycaster="objects: .clickable"></a-cursor>
+            </a-camera>
+        </a-entity>
+
+        <a-entity id="pillars-container"></a-entity>
+    </a-scene>
+
+    <script>
+        const mapContent = document.getElementById('map-content');
+        let scale = 0.5, pointX = -500, pointY = -500, panning = false, start = { x: 0, y: 0 };
+        function updateMapTransform() { mapContent.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`; }
+        updateMapTransform();
+        mapContent.onmousedown = function(e) { e.preventDefault(); panning = true; start = { x: e.clientX - pointX, y: e.clientY - pointY }; };
+        window.onmousemove = function(e) { if (!panning) return; pointX = e.clientX - start.x; pointY = e.clientY - start.y; updateMapTransform(); };
+        window.onmouseup = function() { panning = false; };
+        mapContent.onwheel = function(e) {
+            e.preventDefault(); let xs = (e.clientX - pointX) / scale, ys = (e.clientY - pointY) / scale;
+            let delta = (e.wheelDelta ? e.wheelDelta : -e.deltaY); (delta > 0) ? (scale *= 1.1) : (scale /= 1.1);
+            scale = Math.min(Math.max(0.3, scale), 3); pointX = e.clientX - xs * scale; pointY = e.clientY - ys * scale; updateMapTransform();
+        };
+
+        const sitesData = {
+            'site1': [ 
+                { id: 'p1', model: './models/winged_bull.glb', x: -4, z: -4, scale: '1 1 1', rot: '0 45 0', title: 'الثور المجنح (لاماسو)', desc: 'تمثال ضخم برأس إنسان وجسد ثور وأجنحة نسر. كان يوضع على بوابات المدن لحمايتها من الأرواح الشريرة.' },
+                { id: 'p2', model: './models/ashurbanipal.glb', x: 0, z: -6, scale: '1 1 1', rot: '0 0 0', title: 'الملك آشور بانيبال', desc: 'آخر الملوك العظماء للإمبراطورية الآشورية الحديثة. اشتهر بتأسيسه لأول وأعظم مكتبة منظمة في الشرق القديم.' },
+                { id: 'p3', model: './models/cuneiform_tablet.glb', x: 4, z: -4, scale: '1 1 1', rot: '0 -45 0', title: 'لوح مسماري', desc: 'لوح طيني نُقش عليه بالكتابة المسمارية، يوثق علوم وقوانين وأدب بلاد الرافدين.' },
+                { id: 'p4', model: './models/hassuna_pot.glb', x: 5, z: 2, scale: '1 1 1', rot: '0 90 0', title: 'إناء فخاري - حضارة حسونة', desc: 'يعود هذا الإناء الملون إلى موقع تل حسونة (جنوب الموصل)، ويمثل واحدة من أقدم القرى الزراعية في العالم.' },
+                { id: 'p5', model: './models/nimrud_obelisk.glb', x: 0, z: 5, scale: '1 1 1', rot: '0 0 0', title: 'المسلة السوداء', desc: 'مسلة تاريخية تعود للملك شلمنصر الثالث، اكتُشفت في مدينة نمرود توثق انتصارات الملك.' },
+                { id: 'p6', model: './models/spring_girl.glb', x: -5, z: 2, scale: '1 1 1', rot: '0 135 0', title: 'تمثال فتاة الربيع', desc: 'أحد الرموز الحديثة لمدينة الموصل، يجسد جمال المدينة التي تُلقب بـ "أم الربيعين".' }
+            ],
+            'site2': [ { id: 'p7', color: '#005f73', x: -3, z: -3 }, { id: 'p8', color: '#0a9396', x: 3, z: -3 } ]
+        };
+
+        const uiLayer = document.getElementById('ui-layer');
+        const controlsUI = document.getElementById('controls-ui');
+        const pillarsContainer = document.getElementById('pillars-container');
+        const cameraRig = document.getElementById('cameraRig');
+        const infoPanel = document.getElementById('info-panel');
+        const infoTitle = document.getElementById('info-title');
+        const infoDesc = document.getElementById('info-desc');
+
+        function enterSite(siteId) {
+            uiLayer.style.opacity = '0';
+            setTimeout(() => {
+                uiLayer.style.pointerEvents = 'none'; controlsUI.style.display = 'flex'; spawnPillarsAndArtifacts(sitesData[siteId], siteId); 
+            }, 800);
+        }
+
+        function spawnPillarsAndArtifacts(data, siteId) {
+            pillarsContainer.innerHTML = ''; 
+            data.forEach((item, index) => {
+                let group = document.createElement('a-entity');
+                group.setAttribute('position', `${item.x} -5 ${item.z}`); 
+
+                let pillar = document.createElement('a-cylinder');
+                pillar.setAttribute('radius', '0.6'); pillar.setAttribute('height', '1.5'); 
+                pillar.setAttribute('color', '#444'); 
+                pillar.setAttribute('class', 'clickable'); 
+                group.appendChild(pillar);
+
+                let artifact;
+                if (item.model) {
+                    artifact = document.createElement('a-entity');
+                    artifact.setAttribute('gltf-model', `url(${item.model})`); 
+                    artifact.setAttribute('scale', item.scale); 
+                    artifact.setAttribute('rotation', item.rot); 
+                    artifact.setAttribute('position', '0 1.5 0'); 
+                    artifact.setAttribute('class', 'clickable'); 
+                    group.appendChild(artifact);
+                }
+
+                pillarsContainer.appendChild(group);
+
+                let delay = index * 300; 
+                setTimeout(() => { group.setAttribute('animation', `property: position; to: ${item.x} 0.75 ${item.z}; dur: 1500; easing: easeOutElastic`); }, 400 + delay);
+
+                let handleClick = function() {
+                    cameraRig.removeAttribute('animation'); 
+                    
+                    let dist = Math.sqrt(item.x * item.x + item.z * item.z);
+                    let ratio = (dist - 2.5) / dist; 
+                    let zoomX = item.x * ratio;
+                    let zoomZ = item.z * ratio;
+                    
+                    cameraRig.setAttribute('animation', `property: position; to: ${zoomX} 1.6 ${zoomZ}; dur: 1500; easing: easeOutCubic`);
+                    
+                    infoPanel.style.display = 'none';
+                    setTimeout(() => {
+                        infoTitle.innerText = item.title; infoDesc.innerText = item.desc; infoPanel.style.display = 'block';
+                    }, 1200);
+                };
+
+                pillar.addEventListener('click', handleClick);
+                if(artifact) artifact.addEventListener('click', handleClick);
+            });
+        }
+
+        function closeInfoPanel() {
+            infoPanel.style.display = 'none';
+            cameraRig.setAttribute('animation', `property: position; to: 0 1.6 0; dur: 1500; easing: easeOutCubic`);
+        }
+
+        function exitSite() {
+            uiLayer.style.opacity = '1'; uiLayer.style.pointerEvents = 'all'; 
+            controlsUI.style.display = 'none'; infoPanel.style.display = 'none';
+            pillarsContainer.innerHTML = ''; cameraRig.removeAttribute('animation'); cameraRig.setAttribute('position', '0 1.6 0'); 
+        }
+    </script>
+</body>
+</html>
