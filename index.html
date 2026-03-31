@@ -83,18 +83,23 @@
             display: none; justify-content: space-between; align-items: flex-start; pointer-events: none;
         }
         
-        #back-btn {
-            padding: 10px 25px; background: rgba(187, 43, 43, 0.95); color: white;
-            border: 1px solid #ff4d4d; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px; font-family: 'Tajawal', sans-serif;
-            pointer-events: all; box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: background 0.3s;
-        }
-        #back-btn:hover { background: rgba(220, 30, 30, 1); }
-        
         #instructions {
             background: rgba(10, 15, 25, 0.9); color: #e9d8a6; padding: 15px; border-radius: 12px;
             font-size: 15px; text-align: right; pointer-events: none; border: 1px solid #4a5a6a;
             transition: opacity 0.5s ease; opacity: 1; box-shadow: 0 5px 15px rgba(0,0,0,0.5);
         }
+
+        .circle-btn {
+            width: 45px; height: 45px; border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            cursor: pointer; pointer-events: all; transition: all 0.3s; border: none;
+        }
+        .circle-btn:active { transform: scale(0.9); }
+        
+        #back-btn { background: rgba(187, 43, 43, 0.95); color: white; border: 1px solid #ff4d4d; box-shadow: 0 5px 15px rgba(187,43,43,0.4); }
+        #back-btn:hover { background: rgba(220, 30, 30, 1); box-shadow: 0 5px 20px rgba(187,43,43,0.6); }
+        
+        #hide-ui-btn { background: rgba(10, 15, 25, 0.9); color: #e9d8a6; border: 1px solid #4a5a6a; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        #hide-ui-btn:hover { background: rgba(44, 62, 80, 1); color: white; }
 
         #info-panel {
             display: none; position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
@@ -115,6 +120,26 @@
     </style>
 
     <script>
+        window.isUIHidden = false;
+        function toggleUI() {
+            window.isUIHidden = !window.isUIHidden;
+            const info = document.getElementById('info-panel');
+            const inst = document.getElementById('instructions');
+            const eyeIcon = document.getElementById('eye-icon');
+            
+            if (window.isUIHidden) {
+                info.style.display = 'none';
+                inst.style.opacity = '0';
+                eyeIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+            } else {
+                if (window.currentRotatingArtifact) {
+                    info.style.display = 'block';
+                }
+                inst.style.opacity = '1';
+                eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+            }
+        }
+
         AFRAME.registerComponent('artifact-rotator', {
             init: function () {
                 this.isDragging = false;
@@ -122,14 +147,25 @@
                 this.camera = document.querySelector('#cam');
                 
                 this.onDown = (e) => {
-                    this.isDragging = true;
                     let evt = e.detail && e.detail.mouseEvent ? e.detail.mouseEvent : e;
+                    // التعديل: إيقاف الدوران إذا استخدمت إصبعين للزووم
+                    if (evt.touches && evt.touches.length > 1) return; 
+                    
+                    this.isDragging = true;
                     this.previousX = evt.clientX || (evt.touches && evt.touches[0] ? evt.touches[0].clientX : 0);
                     if(this.camera) this.camera.setAttribute('look-controls', 'enabled', false);
                 };
 
                 this.onMove = (e) => {
                     if (!this.isDragging) return;
+                    
+                    // التعديل: إيقاف الدوران فوراً إذا لمس الشاشة بإصبع ثاني (حتى يشتغل الزووم بسلام)
+                    if (e.touches && e.touches.length > 1) {
+                        this.isDragging = false;
+                        if(this.camera) this.camera.setAttribute('look-controls', 'enabled', true);
+                        return;
+                    }
+
                     let clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : undefined);
                     if(clientX === undefined) return;
                     let deltaX = clientX - this.previousX;
@@ -201,7 +237,8 @@
                         let currentDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
                         let distDelta = currentDist - initialDist; 
                         initialDist = currentDist; 
-                        this.zoom(distDelta * -this.data.zoomSpeed); 
+                        // التعديل: تقليل سرعة الزووم بالموبايل حتى يكون سلس وما يطفر
+                        this.zoom(distDelta * -0.005); 
                     }
                 });
                 document.addEventListener('touchend', () => this.active = false);
@@ -213,14 +250,23 @@
                 v.applyEuler(camRot); this.el.object3D.position.add(v);
             },
             zoom: function(dz) {
-                if (!this.camera) return; let camRot = this.camera.object3D.rotation;
+                if (!this.camera) return; 
+                // التعديل: السماح بكسر حركة الكاميرا التلقائية حتى تكدر تزوم بحرية تامة
+                this.el.removeAttribute('animation'); 
+                
+                let camRot = this.camera.object3D.rotation;
                 let v = new THREE.Vector3(0, 0, dz);
-                v.applyEuler(camRot); this.el.object3D.position.add(v);
+                v.applyEuler(camRot); 
+                this.el.object3D.position.add(v);
 
                 let infoPanel = document.getElementById('info-panel');
                 let instructions = document.getElementById('instructions');
                 if (infoPanel) infoPanel.style.display = 'none';
                 if (instructions) instructions.style.opacity = '0';
+                
+                window.isUIHidden = true;
+                let eyeIcon = document.getElementById('eye-icon');
+                if(eyeIcon) eyeIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
             }
         });
     </script>
@@ -262,7 +308,14 @@
             ✌️ إصبعين: مشي وزووم للتقريب<br>
             🖱️ اضغط على القطعة لمعرفة تفاصيلها
         </div>
-        <button id="back-btn" onclick="exitSite()">العودة للخارطة</button>
+        <div style="display: flex; gap: 10px;">
+            <button id="hide-ui-btn" class="circle-btn" onclick="toggleUI()" title="إخفاء/إظهار الواجهة">
+                <svg id="eye-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+            <button id="back-btn" class="circle-btn" onclick="exitSite()" title="الرجوع للخارطة">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+        </div>
     </div>
 
     <div id="info-panel">
@@ -323,7 +376,7 @@
         const sitesData = {
             'site1': [ 
                 { id: 'p1', model: './models/winged_bull.glb', x: -4, z: -4, scale: '1 1 1', rot: '0 45 0', title: 'الثور المجنح (لاماسو)', desc: 'تمثال ضخم برأس إنسان وجسد ثور وأجنحة نسر. كان يوضع على بوابات المدن لحمايتها من الأرواح الشريرة.' },
-                { id: 'p2', model: './models/ashurbanipal.glb', x: 0, z: -6, scale: '1 1 1', rot: '0 0 0', title: 'الملك آشور بانيبال', desc: 'آخر الملوك العظماء للإمبراطورية الآشورية الحديثة. اشتهر بتأسيسه لأول وأعظم مكتبة منظمة في الشرق القديم.' },
+                { id: 'p2', model: './models/ashurbanipal.glb', x: 0, z: -6, scale: '1 1 1', rot: '0 0 0', title: 'المل الملك آشور بانيبال', desc: 'آخر الملوك العظماء للإمبراطورية الآشورية الحديثة. اشتهر بتأسيسه لأول وأعظم مكتبة منظمة في الشرق القديم.' },
                 { id: 'p3', model: './models/cuneiform_tablet.glb', x: 4, z: -4, scale: '1 1 1', rot: '0 -45 0', title: 'لوح مسماري', desc: 'لوح طيني نُقش عليه بالكتابة المسمارية، يوثق علوم وقوانين وأدب بلاد الرافدين.' },
                 { id: 'p4', model: './models/hassuna_pot.glb', x: 5, z: 2, scale: '1 1 1', rot: '0 90 0', title: 'إناء فخاري - حضارة حسونة', desc: 'يعود هذا الإناء الملون إلى موقع تل حسونة (جنوب الموصل)، ويمثل واحدة من أقدم القرى الزراعية في العالم.' },
                 { id: 'p5', model: './models/nimrud_obelisk.glb', x: 0, z: 5, scale: '1 1 1', rot: '0 0 0', title: 'المسلة السوداء', desc: 'مسلة تاريخية تعود للملك شلمنصر الثالث، اكتُشفت في مدينة نمرود توثق انتصارات الملك.' },
@@ -378,7 +431,6 @@
                 if (item.model) {
                     artifact = document.createElement('a-entity');
                     artifact.setAttribute('gltf-model', `url(${item.model})`); 
-                    // التعديل 1: الحجم الأكبر 0.8
                     artifact.setAttribute('scale', '0.8 0.8 0.8'); 
                     artifact.setAttribute('rotation', item.rot); 
                     artifact.setAttribute('position', '0 0.75 0'); 
@@ -395,7 +447,6 @@
                     cameraRig.removeAttribute('animation'); 
                     
                     let dist = Math.sqrt(item.x * item.x + item.z * item.z);
-                    // التعديل 2: التقريب أكثر (الزوم 1.2 بدل 2.5)
                     let ratio = (dist - 1.2) / dist; 
                     let zoomX = item.x * ratio;
                     let zoomZ = item.z * ratio;
@@ -415,7 +466,10 @@
                     
                     infoPanel.style.display = 'none';
                     setTimeout(() => {
-                        infoTitle.innerText = item.title; infoDesc.innerText = item.desc; infoPanel.style.display = 'block';
+                        infoTitle.innerText = item.title; infoDesc.innerText = item.desc; 
+                        if (!window.isUIHidden) {
+                            infoPanel.style.display = 'block';
+                        }
                     }, 1200);
                 };
 
@@ -442,6 +496,10 @@
                 uiLayer.style.pointerEvents = 'all'; 
             }, 10);
             
+            window.isUIHidden = false;
+            let eyeIcon = document.getElementById('eye-icon');
+            if(eyeIcon) eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+
             document.getElementById('cam').setAttribute('look-controls', 'enabled: true');
             controlsUI.style.display = 'none'; infoPanel.style.display = 'none';
             document.getElementById('instructions').style.opacity = '1'; 
