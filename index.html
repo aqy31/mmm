@@ -115,7 +115,6 @@
     </style>
 
     <script>
-        // أداة دوران المجسم وكاميرا الموبايل (نفسها بدون تغيير)
         AFRAME.registerComponent('artifact-rotator', {
             init: function () {
                 this.isDragging = false;
@@ -166,7 +165,6 @@
             }
         });
 
-        // تحكم المشي والتقريب (نفسه بدون تغيير)
         AFRAME.registerComponent('blender-controls', {
             schema: { speed: {default: 0.015}, zoomSpeed: {default: 0.08} },
             init: function () {
@@ -245,12 +243,12 @@
             <div class="map-decoration" style="top: 55%; left: 60%; font-size: 50px;">الساحل الأيسر</div>
             <div class="map-decoration" style="top: 40%; left: 15%; font-size: 50px;">الساحل الأيمن</div>
 
-            <div id="pin-site1" class="map-pin" style="top: 45%; left: 65%;" onclick="enterSite('site1')">
+            <div id="pin-site1" class="map-pin" style="top: 40%; left: 50%;" onclick="enterSite('site1')">
                 <div class="pin-dot"></div>
                 <div class="pin-label">📍 القاعة الرئيسية (6 تحف)</div>
             </div>
             
-            <div id="pin-site2" class="map-pin" style="top: 65%; left: 25%;" onclick="enterSite('site2')">
+            <div id="pin-site2" class="map-pin" style="top: 60%; left: 50%;" onclick="enterSite('site2')">
                 <div class="pin-dot"></div>
                 <div class="pin-label">📍 قاعة الآثار الإسلامية</div>
             </div>
@@ -290,14 +288,37 @@
         let scale = 0.5, pointX = -500, pointY = -500, panning = false, start = { x: 0, y: 0 };
         function updateMapTransform() { mapContent.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`; }
         updateMapTransform();
-        mapContent.onmousedown = function(e) { e.preventDefault(); panning = true; start = { x: e.clientX - pointX, y: e.clientY - pointY }; };
-        window.onmousemove = function(e) { if (!panning) return; pointX = e.clientX - start.x; pointY = e.clientY - start.y; updateMapTransform(); };
-        window.onmouseup = function() { panning = false; };
-        mapContent.onwheel = function(e) {
+        
+        mapContent.addEventListener('mousedown', function(e) { 
+            e.preventDefault(); panning = true; 
+            start = { x: e.clientX - pointX, y: e.clientY - pointY }; 
+        });
+        window.addEventListener('mousemove', function(e) { 
+            if (!panning) return; 
+            pointX = e.clientX - start.x; pointY = e.clientY - start.y; updateMapTransform(); 
+        });
+        window.addEventListener('mouseup', function() { panning = false; });
+        
+        mapContent.addEventListener('touchstart', function(e) { 
+            panning = true; 
+            start = { x: e.touches[0].clientX - pointX, y: e.touches[0].clientY - pointY }; 
+        }, {passive: false});
+
+        window.addEventListener('touchmove', function(e) { 
+            if (!panning) return; 
+            e.preventDefault(); 
+            pointX = e.touches[0].clientX - start.x; 
+            pointY = e.touches[0].clientY - start.y; 
+            updateMapTransform(); 
+        }, {passive: false});
+
+        window.addEventListener('touchend', function() { panning = false; });
+
+        mapContent.addEventListener('wheel', function(e) {
             e.preventDefault(); let xs = (e.clientX - pointX) / scale, ys = (e.clientY - pointY) / scale;
             let delta = (e.wheelDelta ? e.wheelDelta : -e.deltaY); (delta > 0) ? (scale *= 1.1) : (scale /= 1.1);
             scale = Math.min(Math.max(0.3, scale), 3); pointX = e.clientX - xs * scale; pointY = e.clientY - ys * scale; updateMapTransform();
-        };
+        }, {passive: false});
 
         const sitesData = {
             'site1': [ 
@@ -357,10 +378,9 @@
                 if (item.model) {
                     artifact = document.createElement('a-entity');
                     artifact.setAttribute('gltf-model', `url(${item.model})`); 
-                    // التعديل الأول: فرض حجم موحد لكل المجسمات
-                    artifact.setAttribute('scale', '0.5 0.5 0.5'); 
+                    // التعديل 1: الحجم الأكبر 0.8
+                    artifact.setAttribute('scale', '0.8 0.8 0.8'); 
                     artifact.setAttribute('rotation', item.rot); 
-                    // التعديل الثاني: وضعها مباشرة فوق الأسطوانة بارتفاع 0.75
                     artifact.setAttribute('position', '0 0.75 0'); 
                     artifact.setAttribute('class', 'clickable'); 
                     group.appendChild(artifact);
@@ -375,7 +395,8 @@
                     cameraRig.removeAttribute('animation'); 
                     
                     let dist = Math.sqrt(item.x * item.x + item.z * item.z);
-                    let ratio = (dist - 2.5) / dist; 
+                    // التعديل 2: التقريب أكثر (الزوم 1.2 بدل 2.5)
+                    let ratio = (dist - 1.2) / dist; 
                     let zoomX = item.x * ratio;
                     let zoomZ = item.z * ratio;
                     
